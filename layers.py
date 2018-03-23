@@ -2,11 +2,15 @@ from abc import ABC, abstractmethod
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-from extras import *
+
+
+features = tf.placeholder(tf.float32)
+outputs = tf.placeholder(tf.int32)
+
 
 class Layer(ABC):
 
-	def __init__(self, nodes, batch_size, is_input=False):
+	def __init__(self, nodes, batch_size, is_input=False, name=""):
 		"""	
 		nodes is the number of nodes in this layer
 
@@ -14,11 +18,11 @@ class Layer(ABC):
 		self.nodes = nodes
 		self.batch_size = batch_size
 		self.is_input = is_input
+		self.name = name
 
-
-	@abstractmethod
-	def get_activations(self):
-		pass
+	# @abstractmethod
+	# def get_activations(self):
+	# 	pass
 
 
 class InputLayer(Layer):
@@ -37,9 +41,8 @@ class InputLayer(Layer):
 
 	"""
 
-	def calc_activations(self, features):
-		assignment = tf.assign(self.activations, tf.reshape(features, [-1, self.nodes]))
-		return assignment
+	def calc_activations(self):
+		return tf.assign(self.activations, features)
 
 	"""
 	returns the activations or the calculated features using feature columns
@@ -58,11 +61,11 @@ class HiddenLayer(Layer):
 		activation is the function used to perform activation of the neurons
 
 	"""
-	def __init__(self, nodes, batch_size, prev_layer, activation, grad_activation=None):
-		Layer.__init__(self, nodes, batch_size)
+	def __init__(self, nodes, batch_size, prev_layer, activation, grad_activation=None, name=""):
+		Layer.__init__(self, nodes, batch_size, name=name)
 		self.prev_layer = prev_layer
 		self.activation = activation
-		self.grad_activation = None
+		self.grad_activation = grad_activation
 
 		prev_layer.next_layer = self
 
@@ -71,7 +74,7 @@ class HiddenLayer(Layer):
 			initializer=tf.random_normal_initializer())
 
 		self.biases = tf.get_variable("biases",
-			shape=(nodes), 
+			shape=(nodes, 1), 
 			initializer=tf.random_normal_initializer())
 
 		self.pre_activations = tf.get_variable("pre_activations", 
@@ -82,44 +85,56 @@ class HiddenLayer(Layer):
 			shape=[self.batch_size, self.nodes], 
 			initializer=tf.zeros_initializer())
 
+		self.grad_cost_activation = tf.get_variable("grad_cost_activation", 
+			shape=[self.batch_size, self.nodes], 
+			initializer=tf.zeros_initializer())
+
+		self.grad_activation_weight = tf.get_variable("grad_activation_weight", 
+			shape=[self.batch_size, self.prev_layer.nodes], 
+			initializer=tf.zeros_initializer())
+
 
 	def calc_pre_activations(self):
-		if self.prev_layer.is_input:
-			assignment = tf.assign(self.pre_activations, 
-									tf.matmul(self.prev_layer.get_activations(), 
-										self.weights, transpose_b=True))
-		else:
-			assignment = tf.assign(self.pre_activations, 
-									tf.matmul(self.prev_layer.calc_activations(), 
-										self.weights, transpose_b=True))
-
-		return assignment
+		return tf.assign(self.pre_activations, tf.matmul(self.prev_layer.calc_activations(), 
+			self.weights, transpose_b=True) + tf.transpose(self.biases))
 
 
 	def calc_activations(self):
 		if self.activation is None:
-			assignment = tf.assign(self.activations, self.calc_pre_activations())
+			return tf.assign(self.activations, self.calc_pre_activations())
 		else:
-			assignment = tf.assign(self.activations, self.activation(self.calc_pre_activations()))
+			return tf.assign(self.activations, self.activation(self.calc_pre_activations()))
 
-		return assignment
 
+	def get_pre_activations(self):
+		return self.pre_activations
 
 	def get_activations(self):
 		return self.activations
 
 
-	def _calc_grad_cost_activation(self):
-		return tf.matmul(self.next_layer._calc_grad_cost_activation(), self.next_layer.weights) * \
-				self.calc_grad_activation_pre_activation()
+	# def get_activations(self):
+	# 	return self.activations
+
+	# returns tensor of shape batch_size x activations
+	def calc_grad_cost_activation(self):
+		return tf.assign(self.grad_cost_activation, 
+			tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
+			self.calc_grad_activation_pre_activation())
 
 
 	# have to do for multiple datapoints and multiple weights
 	# for a datapoint, for all the output layer activations, it is same
 	# REMOVE outputs is a tensor containing activation values of previous layer
 	# shape is batch_size x input units
-	def _calc_grad_activation_weight(self):
-		return self.prev_layer.get_activations()
+	def calc_grad_activation_weight(self):
+		return tf.assign(self.grad_activation_weight, self.prev_layer.get_activations())
+
+	def get_grad_cost_activation(self):
+		return self.grad_cost_activation
+
+	def get_grad_activation_weight(self):
+		return self.grad_activation_weight
 
 
 	# REMOVE outputs is a tensor which contains addition of gradients over entire batch size
@@ -127,10 +142,13 @@ class HiddenLayer(Layer):
 		total = tf.zeros(shape=[self.nodes, self.prev_layer.nodes])
 
 		for i in range(self.batch_size):
-			total += tf.matmul(self._calc_grad_cost_activation()[i:i+1, :], 
-					self._calc_grad_activation_weight()[i:i+1, :], transpose_a=True)
+			total = tf.add(total, tf.matmul(self.get_grad_cost_activation()[i:i+1, :], 
+				self.get_grad_activation_weight()[i:i+1, :], transpose_a=True))
 
 		return total
+
+	def calc_grad_cost_bias(self):
+		return tf.transpose(tf.reduce_sum(self.get_grad_cost_activation(), axis=0, keepdims=True))
 
 
 	def get_weights(self):
@@ -145,9 +163,11 @@ class HiddenLayer(Layer):
 			return tf.ones([self.batch_size, self.nodes])
 		else:
 			# TODO replace it by tensors returned from methods
-			return grad_activation(self.pre_activations)
+			return self.grad_activation(self.get_pre_activations())
 
 
+
+# output layer with softmax activation and logistic loss
 
 class OutputLayer(HiddenLayer):
 	"""
@@ -162,76 +182,11 @@ class OutputLayer(HiddenLayer):
 
 	# have to do for multiple datapoints
 	# outputs is a tensor of shape batch_size x output units
-	def _calc_grad_cost_activation(self):
-		return (self.get_activations() - outputs) * self.calc_grad_activation_pre_activation()
+	# TODO do following such that outputs is not one hot tensor
+	def calc_grad_cost_activation(self):
+		return tf.assign(self.grad_cost_activation, tf.subtract(tf.nn.softmax(self.get_activations()), tf.to_float(outputs)) * \
+				self.calc_grad_activation_pre_activation())
 
-
-
-def model(n_features, batch_size):
-
-	hidden_layer_1_nodes = 10
-	n_classes = 3
-
-	with tf.variable_scope("input_layer_scope"):
-		input_layer = InputLayer(n_features, batch_size)
-
-	with tf.variable_scope("hidden_layer_1_scope"):
-		hidden_layer_1 = HiddenLayer(hidden_layer_1_nodes, batch_size, input_layer, activation=None)
-
-	with tf.variable_scope("output_layer_scope"):
-		output_layer = OutputLayer(n_classes, batch_size, hidden_layer_1, activation=tf.nn.softmax, 
-									grad_activation=None) #TODO
-
-	layers = [input_layer, hidden_layer_1, output_layer]
-
-	return layers
-
-outputs = tf.placeholder(tf.float32)
-
-# layers is the list of initialized layers
-# dataset is the dataset whose iterator returns the input and outputs in batches
-# list of feature columns to get features from dataset
-
-def fit(layers, dataset, feature_columns):
-	iterator = dataset.make_one_shot_iterator().get_next()
-
-	sess.run(tf.global_variables_initializer())
-
-	# converting iterator[0] to features
-	feature_batch = tf.feature_column.input_layer(iterator[0], feature_columns)
-	output_batch = tf.one_hot(iterator[1], depth=3)
-
-	# TODO implement using placeholder
-	input_layer_activations = sess.run(layers[0].calc_activations(feature_batch))
-
-	sess.run(layers[-1].calc_activations())
-
-	sess.run((layers[1].calc_grad_cost_weight(), layers[2].calc_grad_cost_weight()), 
-		feed_dict={outputs : sess.run(output_batch)})
-
-
-
-if __name__ == '__main__':
-	
-	with tf.Session() as sess:
-		batch_size = 10
-
-		train, test = load_data()
-		keys = train[0].keys()
-
-		feature_columns = []
-		for feature_name in keys:
-			feature_columns.append(tf.feature_column.numeric_column(key=feature_name))
-
-
-		dataset = train_input_fn(train[0], train[1], batch_size)
-
-		n_features = train[0].shape[1]
-
-		layers = model(n_features, batch_size)
-		fit(layers, dataset, feature_columns)
-
-		# while True:
-		# 	try:
-		# 	except tf.errors.OutOfRangeError:
-		# 		break
+	def calculate_loss(self):
+		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=outputs, 
+					logits=self.get_activations()))
