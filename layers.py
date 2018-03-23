@@ -10,19 +10,27 @@ outputs = tf.placeholder(tf.int32)
 
 class Layer(ABC):
 
-	def __init__(self, nodes, batch_size, is_input=False, name=""):
-		"""	
-		nodes is the number of nodes in this layer
+	"""	
+	nodes: the number of nodes in this layer
+	batch_size: the batch size used for training
+	is_input: True if this layer is an input layer
+	name: the name of this layer
 
-		"""
+	"""
+
+	def __init__(self, nodes, batch_size, is_input=False, name=""):
 		self.nodes = nodes
 		self.batch_size = batch_size
 		self.is_input = is_input
 		self.name = name
 
-	# @abstractmethod
-	# def get_activations(self):
-	# 	pass
+	@abstractmethod
+	def calc_activations(self):
+		pass
+
+	@abstractmethod
+	def get_activations(self):
+		pass
 
 
 class InputLayer(Layer):
@@ -34,33 +42,33 @@ class InputLayer(Layer):
 			shape=[self.batch_size, self.nodes], initializer=tf.zeros_initializer())
 
 
-	"""
-	features is the tensor which is the features to feed forward
-
-	returns the activations or the calculated features using feature columns
-
-	"""
 
 	def calc_activations(self):
+		"""
+		returns the activations or the calculated features using feature columns
+
+		"""
 		return tf.assign(self.activations, features)
 
-	"""
-	returns the activations or the calculated features using feature columns
-
-	"""
-
 	def get_activations(self):
+		"""
+		returns the activations or the calculated features using feature columns
+
+		"""
 		return self.activations
 
 
 class HiddenLayer(Layer):
 
 	"""
-		prev_layer is the layer before this layer (don't use this constructor for input layer)
+		prev_layer: the layer before this layer (don't use this constructor for input layer)
 
-		activation is the function used to perform activation of the neurons
+		activation: the function used to perform activation of the neurons
+
+		grad_activation: the function used to perform gradient of the activation function
 
 	"""
+
 	def __init__(self, nodes, batch_size, prev_layer, activation, grad_activation=None, name=""):
 		Layer.__init__(self, nodes, batch_size, name=name)
 		self.prev_layer = prev_layer
@@ -113,11 +121,11 @@ class HiddenLayer(Layer):
 		return self.activations
 
 
-	# def get_activations(self):
-	# 	return self.activations
-
-	# returns tensor of shape batch_size x activations
 	def calc_grad_cost_activation(self):
+		"""
+		Returns: tensor of shape batch_size x activations
+
+		"""
 		return tf.assign(self.grad_cost_activation, 
 			tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
 			self.calc_grad_activation_pre_activation())
@@ -125,9 +133,12 @@ class HiddenLayer(Layer):
 
 	# have to do for multiple datapoints and multiple weights
 	# for a datapoint, for all the output layer activations, it is same
-	# REMOVE outputs is a tensor containing activation values of previous layer
-	# shape is batch_size x input units
+
 	def calc_grad_activation_weight(self):
+		"""
+		Returns: tensor with shape (batch_size) x (previous layer units)
+
+		"""
 		return tf.assign(self.grad_activation_weight, self.prev_layer.get_activations())
 
 	def get_grad_cost_activation(self):
@@ -137,8 +148,11 @@ class HiddenLayer(Layer):
 		return self.grad_activation_weight
 
 
-	# REMOVE outputs is a tensor which contains addition of gradients over entire batch size
 	def calc_grad_cost_weight(self):
+		"""
+		Returns: tensor with shape same as weights of this layer
+
+		"""
 		total = tf.zeros(shape=[self.nodes, self.prev_layer.nodes])
 
 		for i in range(self.batch_size):
@@ -147,7 +161,12 @@ class HiddenLayer(Layer):
 
 		return total
 
+
 	def calc_grad_cost_bias(self):
+		"""
+		Returns: tensor with shape same as bias of this layer
+
+		"""
 		return tf.transpose(tf.reduce_sum(self.get_grad_cost_activation(), axis=0, keepdims=True))
 
 
@@ -158,7 +177,13 @@ class HiddenLayer(Layer):
 	# remember that pre_activations, activations is an array or consist of many datapoints
 	# calculate gradient of activations with respect to preactivations
 	# here, activation function is equality i.e h(a) = a
+
+
 	def calc_grad_activation_pre_activation(self):
+		"""
+		Returns: tensor with shape (batch size) x (number of activations)
+
+		"""
 		if self.grad_activation is None:
 			return tf.ones([self.batch_size, self.nodes])
 		else:
@@ -166,27 +191,30 @@ class HiddenLayer(Layer):
 			return self.grad_activation(self.get_pre_activations())
 
 
-
-# output layer with softmax activation and logistic loss
-
 class OutputLayer(HiddenLayer):
 	"""
-		prev_layer is the layer before this layer (don't use this constructor for input layer)
-
-		activation is the function used to perform activation of the neurons
+		output layer with softmax activation and logistic loss
 
 	"""
-	# def __init__(self, nodes, batch_size, prev_layer, activation, grad_activation=None):
-	# 	HiddenLayer.__init__(self, nodes, batch_size, prev_layer, activation, grad_activation)
-
 
 	# have to do for multiple datapoints
 	# outputs is a tensor of shape batch_size x output units
-	# TODO do following such that outputs is not one hot tensor
+
+
 	def calc_grad_cost_activation(self):
+		"""
+		Returns: tensor of shape (batch_size) x (activations)
+
+		"""
 		return tf.assign(self.grad_cost_activation, tf.subtract(tf.nn.softmax(self.get_activations()), tf.to_float(outputs)) * \
 				self.calc_grad_activation_pre_activation())
 
+
 	def calculate_loss(self):
+		"""
+		calculates the softmax cross entropy loss
+
+		Returns: the tensor with scalar value of loss
+		"""
 		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=outputs, 
 					logits=self.get_activations()))

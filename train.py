@@ -5,140 +5,106 @@ from extras import *
 import layers
 
 
-NUMBER_EPOCHS_TO_TRAIN = 100
-BATCH_SIZE = 120
+NUMBER_EPOCHS_TO_TRAIN = 1000
+BATCH_SIZE = 10
 
-
-# model is the list of initialized layers
-# dataset is the dataset whose iterator returns the input and outputs in batches
-# list of feature columns to get features from dataset
-# train_size is the size of the dataset that each epoch should at least travel
-# alpha is the step_size
 
 def gradient_descent(model, dataset, feature_columns, train_size, alpha, sess):
+	"""
+	model: the list of initialized layers
+	dataset: the dataset whose iterator returns the input and outputs in batches
+	feature_columns: list of feature columns to get features from dataset
+	train_size: the size of the dataset that each epoch should at least travel
+	alpha: the step_size
+
+	Calculates the gradient descent and perform weight updates
+	"""
+
+	# run the gradient descent on entire dataset for number of epochs
 
 	n_iter = (train_size / BATCH_SIZE + (train_size % BATCH_SIZE != 0)) * NUMBER_EPOCHS_TO_TRAIN
 	print("number of iterations gradient descent will perform:", n_iter)
 
-	iterator = dataset.make_one_shot_iterator().get_next()
+	iterator = dataset.make_one_shot_iterator()
 
-	# run the gradient descent for number of epochs
-	while n_iter:
+	cond = lambda i: tf.less(i, n_iter)
 
-		# do the following for an entire dataset
+	def body(iter_n):
+		next_item = iterator.get_next()
 
-		# converting iterator[0] to features
-		feature_batch = tf.feature_column.input_layer(iterator[0], feature_columns)
-		output_batch = tf.one_hot(iterator[1], depth=3, dtype=tf.int32)
+		# converting next_item[0] to features
+		feature_batch = tf.feature_column.input_layer(next_item[0], feature_columns)
+		output_batch = tf.one_hot(next_item[1], depth=3, dtype=tf.int32)
+
+		layers.features = feature_batch
+		layers.outputs = output_batch
 
 		operations = []
 		prints = []
-
-		# calculate activations of the last layer which will recalculate activations of all the 
-		# previous layers
-
 		check = []
 
-		# for i, cur_layer in enumerate(model):
-		# 	check.append(tf.Print(cur_layer.get_activations(), [cur_layer.get_activations()], message="activations before calc " + str(i), summarize=cur_layer.nodes))
-
 		for i, cur_layer in enumerate(model[1:]):
-			check.append(tf.Print(cur_layer.weights, [cur_layer.weights], message="weights " + str(i+1), summarize=cur_layer.nodes*cur_layer.prev_layer.nodes))
-			check.append(tf.Print(cur_layer.biases, [cur_layer.biases], message="biases " + str(i+1), summarize=cur_layer.nodes))
+			check.append(tf.Print(cur_layer.weights, 
+				[cur_layer.weights], message="weights " + str(i+1), 
+				summarize=cur_layer.nodes*cur_layer.prev_layer.nodes))
+			check.append(tf.Print(cur_layer.biases, 
+				[cur_layer.biases], message="biases " + str(i+1), summarize=cur_layer.nodes))
 
-		calc_activations_op = model[-1].calc_activations()
 
-		# prints.append(tf.Print(cur_layer.get_grad_activation_weight(), [model[i].get_grad_activation_weight() for i in range(1, len(model))], message="grad activations weight before calc"))
+		with tf.control_dependencies([layers.features, layers.outputs]):
+			# calculate activations of the last layer which will recalculate activations of all the 
+			# previous layers
+			calc_activations_op = model[-1].calc_activations()
 
 		with tf.control_dependencies([*check, calc_activations_op]):
-			# for i, cur_layer in enumerate(model):
-			# 	prints.append(tf.Print(cur_layer.get_activations(), [cur_layer.get_activations()], message="activations after calc " + str(i), summarize=cur_layer.nodes))
-
-
 			# calculate error terms for the second layers which will calculate error terms for all 
 			# the next layers
 			calc_grad_cost_activation_op = model[1].calc_grad_cost_activation()
 
-			for i, cur_layer in enumerate(model[1:]):
-				check.append(tf.Print(cur_layer.grad_cost_activation, [cur_layer.grad_cost_activation], message="grad_cost_activation " + str(i + 1), summarize=cur_layer.nodes))
-
 			# calculate grad activation weight (not useful here)
-			calc_grad_activation_weight_op = [model[i].calc_grad_activation_weight() for i in range(1, len(model))]
+			calc_grad_activation_weight_op = \
+			[model[i].calc_grad_activation_weight() for i in range(1, len(model))]
+
+
+		with tf.control_dependencies([*prints, calc_grad_cost_activation_op, 
+			*calc_grad_activation_weight_op]):
 
 			for i, cur_layer in enumerate(model[1:]):
-				check.append(tf.Print(cur_layer.grad_activation_weight, [cur_layer.grad_activation_weight], message="grad_activation_weight " + str(i + 1), summarize=cur_layer.prev_layer.nodes))
-
-
-		# with tf.control_dependencies(calc_grad_activation_weight_op):
-		# 	for i in range(1, len(model)):
-				# prints.append(tf.Print(model[i].get_grad_activation_weight(), [model[i].get_grad_activation_weight()], message="grad activations weight after calc " + str(i)))
-
-
-		with tf.control_dependencies([*check, calc_grad_cost_activation_op, 
-			*calc_grad_activation_weight_op, calc_activations_op]):
-
-			for i, cur_layer in enumerate(model[1:]):
-				# print(cur_layer.name)
-				# prints.append(tf.Print(cur_layer.get_activations(), [cur_layer.get_activations()], message="activations " + str(i)))
-
-				# prints.append(tf.Print(cur_layer.get_grad_activation_weight(), [cur_layer.get_grad_activation_weight()], message="grad activations weight before weight update " + str(i)))
-
 				grad_cost_weight = cur_layer.calc_grad_cost_weight()
 				update = cur_layer.weights - alpha * (grad_cost_weight)
 				operations.append(tf.assign(cur_layer.weights, update))
-
-				prints.append(tf.Print(grad_cost_weight, [grad_cost_weight], message="grad_cost_weight " + str(i + 1), summarize=cur_layer.nodes * cur_layer.prev_layer.nodes))
 
 				grad_cost_bias = cur_layer.calc_grad_cost_bias()
 				update = cur_layer.biases - alpha * (grad_cost_bias)
 				operations.append(tf.assign(cur_layer.biases, update))
 
-
 		with tf.control_dependencies(operations):
-			# prints.append(tf.Print(model[1].weights, [model[1].weights], message="hidden layer weights"))
-			# prints.append(tf.Print(model[1].biases, [model[1].biases], message="hidden layer biases"))
-			# prints.append(tf.Print(model[2].weights, [model[2].weights], message="output layer weights"))
-			# prints.append(tf.Print(model[2].biases, [model[2].biases], message="output layer biases"))
 			loss = model[-1].calculate_loss()
+			prints.append(tf.Print(loss, [loss], message="loss is "))
 
-		to_print, loss = sess.run((prints, loss), feed_dict={layers.features : sess.run(feature_batch), 
-			layers.outputs : sess.run(output_batch)})
-
-		print('loss is:', loss)
-		# print(sess.run(model[0].activations))
-		# print(sess.run(model[1].activations))
-		# print('weights are\n', sess.run(model[-1].weights))
-		# print('biases are\n', sess.run(model[-1].biases))
-		# print('weights are\n', sess.run(model[-2].weights))
-		# print('biases are\n', sess.run(model[-2].biases))
-
-		n_iter -= 1
+		with tf.control_dependencies([*prints, loss]):
+			return tf.add(iter_n, 1.0)
 
 
-# model is the list of initialized layers
-# dataset is the dataset whose iterator returns the input and outputs in batches
-# list of feature columns to get features from dataset
-# train_size is the size of the training data
-# alpha is the step size
+	while_loop = tf.while_loop(cond, body, [tf.constant(0.0)], parallel_iterations=1)
+	sess.run(while_loop)
+
+	# to_print, loss = sess.run((prints, loss), 
+	# 	feed_dict={layers.features : sess.run(feature_batch), 
+	# 	layers.outputs : sess.run(output_batch)})
+
 
 def fit(model, dataset, feature_columns, train_size, alpha=0.001):
+	"""
+	model: the list of initialized layers
+	dataset: the dataset whose iterator returns the input and outputs in batches
+	list: feature columns to get features from dataset
+	train_size: the size of the training data
+	alpha: the step size
 
-	# iterator = dataset.make_one_shot_iterator().get_next()
+	Fits the model to the dataset
 
-	# with tf.Session() as sess:
-	# 	sess.run(tf.global_variables_initializer())
-
-		# converting iterator[0] to features
-		# feature_batch = tf.feature_column.input_layer(iterator[0], feature_columns)
-		# output_batch = tf.one_hot(iterator[1], depth=3)
-
-		# u, v, x, y, z = sess.run((model[-1].calc_activations(), model[1].calc_grad_cost_weight(), 
-		# 	model[2].calc_grad_cost_weight(), model[1].calc_grad_cost_bias(), 
-		# 	model[2].calc_grad_cost_bias()), 
-		# feed_dict={layers.features : sess.run(feature_batch), 
-		# 			layers.outputs : sess.run(output_batch)})
-
-		# print(u, v, x, y, z)
+	"""
 
 	with tf.Session() as sess:
 		sess.run(tf.global_variables_initializer())
@@ -149,8 +115,16 @@ def fit(model, dataset, feature_columns, train_size, alpha=0.001):
 
 
 def model(n_features, batch_size):
+	"""
+	n_features: number of features in the dataset
+	batch_size: the batch_size with which model is to be trained
+
+	Returns: the list of layers
+
+	"""
 
 	hidden_layer_1_nodes = 10
+	hidden_layer_2_nodes = 3
 	n_classes = 3
 
 	with tf.variable_scope("input_layer_scope"):
@@ -160,11 +134,15 @@ def model(n_features, batch_size):
 		hidden_layer_1 = layers.HiddenLayer(hidden_layer_1_nodes, batch_size, input_layer, 
 											activation=None, name="hidden layer 1")
 
+	with tf.variable_scope("hidden_layer_2_scope"):
+		hidden_layer_2 = layers.HiddenLayer(hidden_layer_2_nodes, batch_size, hidden_layer_1, 
+											activation=None, name="hidden layer 2")
+
 	with tf.variable_scope("output_layer_scope"):
-		output_layer = layers.OutputLayer(n_classes, batch_size, hidden_layer_1,  
+		output_layer = layers.OutputLayer(n_classes, batch_size, hidden_layer_2,  
 											activation=None, grad_activation=None, name="output layer") #TODO
 
-	model = [input_layer, hidden_layer_1, output_layer]
+	model = [input_layer, hidden_layer_1, hidden_layer_2, output_layer]
 	# model = [input_layer, output_layer]
 
 	return model
@@ -175,14 +153,13 @@ if __name__ == '__main__':
 	batch_size = BATCH_SIZE
 
 	train, test = load_data()
-	keys = train[0].keys()
+	dataset = train_input_fn(train[0], train[1], batch_size)
 
+	keys = train[0].keys()
 	feature_columns = []
 	for feature_name in keys:
 		feature_columns.append(tf.feature_column.numeric_column(key=feature_name))
 
-
-	dataset = train_input_fn(train[0], train[1], batch_size)
 
 	train_size = len(train[0])
 	n_features = train[0].shape[1]
@@ -190,10 +167,7 @@ if __name__ == '__main__':
 	print("size of the dataset is:", train_size)
 	print("number of features are:", n_features)
 
-	model = model(n_features, batch_size)
-	fit(model, dataset, feature_columns, train_size)
+	alpha = 0.00001
 
-	# while True:
-	# 	try:
-	# 	except tf.errors.OutOfRangeError:
-	# 		break
+	model = model(n_features, batch_size)
+	fit(model, dataset, feature_columns, train_size, alpha=alpha)
