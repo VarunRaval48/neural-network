@@ -6,7 +6,7 @@ import layers
 
 
 NUMBER_EPOCHS_TO_TRAIN = 1000
-BATCH_SIZE = 10
+BATCH_SIZE = 120
 
 
 def gradient_descent(model, dataset, feature_columns, train_size, alpha, sess):
@@ -114,10 +114,9 @@ def fit(model, dataset, feature_columns, train_size, alpha=0.001):
 		gradient_descent(model, dataset, feature_columns, train_size, alpha, sess)
 
 
-def model(n_features, batch_size):
+def model(n_features):
 	"""
 	n_features: number of features in the dataset
-	batch_size: the batch_size with which model is to be trained
 
 	Returns: the list of layers
 
@@ -128,19 +127,20 @@ def model(n_features, batch_size):
 	n_classes = 3
 
 	with tf.variable_scope("input_layer_scope"):
-		input_layer = layers.InputLayer(n_features, batch_size)
+		input_layer = layers.InputLayer(n_features)
 
 	with tf.variable_scope("hidden_layer_1_scope"):
-		hidden_layer_1 = layers.HiddenLayer(hidden_layer_1_nodes, batch_size, input_layer, 
+		hidden_layer_1 = layers.HiddenLayer(hidden_layer_1_nodes, input_layer, 
 											activation=None, name="hidden layer 1")
 
 	with tf.variable_scope("hidden_layer_2_scope"):
-		hidden_layer_2 = layers.HiddenLayer(hidden_layer_2_nodes, batch_size, hidden_layer_1, 
+		hidden_layer_2 = layers.HiddenLayer(hidden_layer_2_nodes, hidden_layer_1, 
 											activation=None, name="hidden layer 2")
 
 	with tf.variable_scope("output_layer_scope"):
-		output_layer = layers.OutputLayer(n_classes, batch_size, hidden_layer_2,  
-											activation=None, grad_activation=None, name="output layer") #TODO
+		output_layer = layers.OutputLayer(n_classes, hidden_layer_2,  
+											activation=None, grad_activation=None, 
+											name="output layer") #TODO
 
 	model = [input_layer, hidden_layer_1, hidden_layer_2, output_layer]
 	# model = [input_layer, output_layer]
@@ -169,5 +169,5 @@ if __name__ == '__main__':
 
 	alpha = 0.00001
 
-	model = model(n_features, batch_size)
+	model = model(n_features)
 	fit(model, dataset, feature_columns, train_size, alpha=alpha)

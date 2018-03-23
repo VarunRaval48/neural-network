@@ -12,15 +12,13 @@ class Layer(ABC):
 
 	"""	
 	nodes: the number of nodes in this layer
-	batch_size: the batch size used for training
 	is_input: True if this layer is an input layer
 	name: the name of this layer
 
 	"""
 
-	def __init__(self, nodes, batch_size, is_input=False, name=""):
+	def __init__(self, nodes, is_input=False, name=""):
 		self.nodes = nodes
-		self.batch_size = batch_size
 		self.is_input = is_input
 		self.name = name
 
@@ -35,12 +33,13 @@ class Layer(ABC):
 
 class InputLayer(Layer):
 
-	def __init__(self, nodes, batch_size):
-		Layer.__init__(self, nodes, batch_size, True)
+	def __init__(self, nodes):
+		Layer.__init__(self, nodes, True)
 
-		self.activations = tf.get_variable("input_activations",  
-			shape=[self.batch_size, self.nodes], initializer=tf.zeros_initializer())
+		# self.activations = tf.get_variable("input_activations",  
+		# 	shape=[self.batch_size, self.nodes], initializer=tf.zeros_initializer())
 
+		self.activations = None
 
 
 	def calc_activations(self):
@@ -48,7 +47,8 @@ class InputLayer(Layer):
 		returns the activations or the calculated features using feature columns
 
 		"""
-		return tf.assign(self.activations, features)
+		self.activations = features
+		return self.activations
 
 	def get_activations(self):
 		"""
@@ -69,8 +69,8 @@ class HiddenLayer(Layer):
 
 	"""
 
-	def __init__(self, nodes, batch_size, prev_layer, activation, grad_activation=None, name=""):
-		Layer.__init__(self, nodes, batch_size, name=name)
+	def __init__(self, nodes, prev_layer, activation, grad_activation=None, name=""):
+		Layer.__init__(self, nodes, name=name)
 		self.prev_layer = prev_layer
 		self.activation = activation
 		self.grad_activation = grad_activation
@@ -85,34 +85,44 @@ class HiddenLayer(Layer):
 			shape=(nodes, 1), 
 			initializer=tf.random_normal_initializer())
 
-		self.pre_activations = tf.get_variable("pre_activations", 
-			shape=[self.batch_size, self.nodes], 
-			initializer=tf.zeros_initializer())
+		# self.pre_activations = tf.get_variable("pre_activations", 
+		# 	shape=[self.batch_size, self.nodes], 
+		# 	initializer=tf.zeros_initializer())
 
-		self.activations = tf.get_variable("activations", 
-			shape=[self.batch_size, self.nodes], 
-			initializer=tf.zeros_initializer())
+		# self.activations = tf.get_variable("activations", 
+		# 	shape=[self.batch_size, self.nodes], 
+		# 	initializer=tf.zeros_initializer())
 
-		self.grad_cost_activation = tf.get_variable("grad_cost_activation", 
-			shape=[self.batch_size, self.nodes], 
-			initializer=tf.zeros_initializer())
+		# self.grad_cost_activation = tf.get_variable("grad_cost_activation", 
+		# 	shape=[self.batch_size, self.nodes], 
+		# 	initializer=tf.zeros_initializer())
 
-		self.grad_activation_weight = tf.get_variable("grad_activation_weight", 
-			shape=[self.batch_size, self.prev_layer.nodes], 
-			initializer=tf.zeros_initializer())
+		# self.grad_activation_weight = tf.get_variable("grad_activation_weight", 
+		# 	shape=[self.batch_size, self.prev_layer.nodes], 
+		# 	initializer=tf.zeros_initializer())
+
+		self.activations = None
+		self.pre_activations = None
+		self.grad_activation_weight = None
+		self.grad_cost_activation = None
 
 
 	def calc_pre_activations(self):
-		return tf.assign(self.pre_activations, tf.matmul(self.prev_layer.calc_activations(), 
-			self.weights, transpose_b=True) + tf.transpose(self.biases))
+
+		self.pre_activations = tf.matmul(self.prev_layer.calc_activations(), 
+			self.weights, transpose_b=True) + tf.transpose(self.biases)
+
+		return self.pre_activations
 
 
 	def calc_activations(self):
-		if self.activation is None:
-			return tf.assign(self.activations, self.calc_pre_activations())
-		else:
-			return tf.assign(self.activations, self.activation(self.calc_pre_activations()))
 
+		if self.activation is None:
+			self.activations = self.calc_pre_activations()
+		else:
+			self.activations = self.activation(self.calc_pre_activations())
+
+		return self.activations
 
 	def get_pre_activations(self):
 		return self.pre_activations
@@ -126,9 +136,11 @@ class HiddenLayer(Layer):
 		Returns: tensor of shape batch_size x activations
 
 		"""
-		return tf.assign(self.grad_cost_activation, 
-			tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
-			self.calc_grad_activation_pre_activation())
+		self.grad_cost_activation = \
+		tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
+		self.calc_grad_activation_pre_activation()
+
+		return self.grad_cost_activation
 
 
 	# have to do for multiple datapoints and multiple weights
@@ -139,7 +151,11 @@ class HiddenLayer(Layer):
 		Returns: tensor with shape (batch_size) x (previous layer units)
 
 		"""
-		return tf.assign(self.grad_activation_weight, self.prev_layer.get_activations())
+		# return tf.assign(self.grad_activation_weight, self.prev_layer.get_activations())
+
+		self.grad_activation_weight = self.prev_layer.get_activations()
+
+		return self.grad_activation_weight
 
 	def get_grad_cost_activation(self):
 		return self.grad_cost_activation
@@ -153,13 +169,24 @@ class HiddenLayer(Layer):
 		Returns: tensor with shape same as weights of this layer
 
 		"""
-		total = tf.zeros(shape=[self.nodes, self.prev_layer.nodes])
+		# total = tf.zeros(shape=[self.nodes, self.prev_layer.nodes])
 
-		for i in range(self.batch_size):
+		# for i in range(self.batch_size):
+		# 	total = tf.add(total, tf.matmul(self.get_grad_cost_activation()[i:i+1, :], 
+		# 		self.get_grad_activation_weight()[i:i+1, :], transpose_a=True))
+
+		cond = lambda i, j: tf.less(i, tf.shape(self.get_grad_cost_activation())[0])
+
+		def body(i, total): 
 			total = tf.add(total, tf.matmul(self.get_grad_cost_activation()[i:i+1, :], 
 				self.get_grad_activation_weight()[i:i+1, :], transpose_a=True))
 
-		return total
+			return tf.add(i, 1), total
+
+		while_loop = tf.while_loop(cond, body, 
+			[tf.constant(0), tf.zeros(shape=[self.nodes, self.prev_layer.nodes])])
+
+		return while_loop[1]
 
 
 	def calc_grad_cost_bias(self):
@@ -185,7 +212,7 @@ class HiddenLayer(Layer):
 
 		"""
 		if self.grad_activation is None:
-			return tf.ones([self.batch_size, self.nodes])
+			return tf.ones(tf.shape(self.get_pre_activations()))
 		else:
 			# TODO replace it by tensors returned from methods
 			return self.grad_activation(self.get_pre_activations())
@@ -206,8 +233,11 @@ class OutputLayer(HiddenLayer):
 		Returns: tensor of shape (batch_size) x (activations)
 
 		"""
-		return tf.assign(self.grad_cost_activation, tf.subtract(tf.nn.softmax(self.get_activations()), tf.to_float(outputs)) * \
-				self.calc_grad_activation_pre_activation())
+		self.grad_cost_activation = \
+		tf.subtract(tf.nn.softmax(self.get_activations()), tf.to_float(outputs)) * \
+		self.calc_grad_activation_pre_activation()
+
+		return self.grad_cost_activation
 
 
 	def calculate_loss(self):
@@ -215,6 +245,7 @@ class OutputLayer(HiddenLayer):
 		calculates the softmax cross entropy loss
 
 		Returns: the tensor with scalar value of loss
+		
 		"""
 		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=outputs, 
 					logits=self.get_activations()))
