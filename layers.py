@@ -85,21 +85,6 @@ class HiddenLayer(Layer):
 			shape=(nodes, 1), 
 			initializer=tf.random_normal_initializer())
 
-		# self.pre_activations = tf.get_variable("pre_activations", 
-		# 	shape=[self.batch_size, self.nodes], 
-		# 	initializer=tf.zeros_initializer())
-
-		# self.activations = tf.get_variable("activations", 
-		# 	shape=[self.batch_size, self.nodes], 
-		# 	initializer=tf.zeros_initializer())
-
-		# self.grad_cost_activation = tf.get_variable("grad_cost_activation", 
-		# 	shape=[self.batch_size, self.nodes], 
-		# 	initializer=tf.zeros_initializer())
-
-		# self.grad_activation_weight = tf.get_variable("grad_activation_weight", 
-		# 	shape=[self.batch_size, self.prev_layer.nodes], 
-		# 	initializer=tf.zeros_initializer())
 
 		self.activations = None
 		self.pre_activations = None
