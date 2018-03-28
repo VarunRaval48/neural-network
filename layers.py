@@ -4,9 +4,6 @@ import numpy as np
 import pandas as pd
 
 
-features = tf.placeholder(tf.float32)
-
-
 class Layer(ABC):
 
 	"""	
@@ -31,6 +28,7 @@ class Layer(ABC):
 
 class InputLayer(Layer):
 
+
 	def __init__(self, nodes):
 		Layer.__init__(self, nodes, True)
 
@@ -38,6 +36,7 @@ class InputLayer(Layer):
 		# 	shape=[self.batch_size, self.nodes], initializer=tf.zeros_initializer())
 
 		self.activations = None
+		self.features = tf.placeholder(tf.float32)
 
 
 	def calc_activations(self):
@@ -45,7 +44,7 @@ class InputLayer(Layer):
 		returns the activations or the calculated features using feature columns
 
 		"""
-		self.activations = features
+		self.activations = self.features
 		return self.activations
 
 	def get_activations(self):

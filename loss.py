@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 import tensorflow as tf
 
 
-outputs = tf.placeholder(tf.int32)
-
 class Loss(ABC):
 
 	"""
@@ -15,6 +13,8 @@ class Loss(ABC):
 		self.prev_layer.next_layer = self
 
 		self.next_layer = None
+		self.outputs = tf.placeholder(tf.int32)
+
 
 	@abstractmethod
 	def calc_grad_cost_activation_prev_layer(self):
@@ -41,7 +41,7 @@ class SoftmaxCrossEntropyLoss(Loss):
 		"""
 
 		self.prev_layer.grad_cost_activation = \
-		tf.subtract(tf.nn.softmax(self.prev_layer.get_activations()), tf.to_float(outputs)) * \
+		tf.subtract(tf.nn.softmax(self.prev_layer.get_activations()), tf.to_float(self.outputs)) * \
 		self.prev_layer.calc_grad_activation_pre_activation()
 
 		return self.prev_layer.grad_cost_activation
@@ -54,5 +54,5 @@ class SoftmaxCrossEntropyLoss(Loss):
 		Returns: the tensor with scalar value of loss
 		"""
 
-		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=outputs, 
+		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.outputs, 
 					logits=self.prev_layer.get_activations()))

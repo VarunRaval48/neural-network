@@ -5,7 +5,7 @@ from extras import *
 from train import *
 
 
-def model(layers, iterator, feature_columns, task=TASK_TRAIN):
+def model(layers, iterator, feature_columns, task=TASK_TRAIN, loss=None):
 	"""
 	Creates the graph and returns values according to task
 
@@ -24,8 +24,16 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 	feature_batch = tf.feature_column.input_layer(next_item[0], feature_columns)
 	output_batch = tf.one_hot(next_item[1], depth=3, dtype=tf.int32)
 
-	l.features = feature_batch
-	lo.outputs = output_batch
+	pre_calculations = []
+
+	layers[0].features = feature_batch
+
+	pre_calculations.append(layers[0].features)
+
+	if loss is not None:
+		loss.outputs = output_batch
+		pre_calculations.append(loss.outputs)
+
 
 	prints = []
 	check = []
@@ -38,7 +46,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 			[cur_layer.biases], message="biases " + str(i+1), summarize=cur_layer.nodes))
 
 
-	with tf.control_dependencies([l.features, lo.outputs]):
+	with tf.control_dependencies(pre_calculations):
 		# calculate activations of the last layer which will recalculate activations of all the 
 		# previous layers
 		calc_activations_op = layers[-1].calc_activations()

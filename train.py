@@ -37,7 +37,7 @@ def gradient_descent(model, layers, loss, dataset, feature_columns, train_size, 
 		operations = []
 		prints = []
 
-		grad_cost_weights, grad_cost_biases = model(layers, iterator, feature_columns, task=TASK_TRAIN)
+		grad_cost_weights, grad_cost_biases = model(layers, iterator, feature_columns, task=TASK_TRAIN, loss=loss)
 
 		for i, cur_layer in enumerate(layers[1:]):
 			update = tf.subtract(cur_layer.weights, (alpha / BATCH_SIZE) * (grad_cost_weights[i]))
@@ -122,7 +122,7 @@ def predict(model, layers, dataset, feature_columns, test_size, outputs):
 
 				print_predictions = tf.Print(predictions, [predictions], 
 					message="predictions are: ", summarize=test_size)
-				_, pval = sess.run((print_predictions, predictions))
+				pval = sess.run(print_predictions)
 				prediction_values = np.append(prediction_values, pval)
 			except:
 				break
@@ -131,4 +131,3 @@ def predict(model, layers, dataset, feature_columns, test_size, outputs):
 		print(outputs)
 
 		print(metrics.accuracy_score(outputs, prediction_values))
-		
