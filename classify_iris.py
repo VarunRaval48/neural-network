@@ -3,6 +3,7 @@ import layers as l
 from extras import *
 from train import *
 
+
 def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 	"""
 	Creates the graph and returns values according to task
@@ -48,7 +49,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 	with tf.control_dependencies([*check, calc_activations_op]):
 		# calculate error terms for the second layers which will calculate error terms for all 
 		# the next layers
-		calc_grad_cost_activation_op = layers[1].calc_grad_cost_activation()
+		calc_grad_cost_activation_op = layers[2].calc_grad_cost_activation_prev_layer()
 
 		# calculate grad activation weight (not useful here)
 		calc_grad_activation_weight_op = \

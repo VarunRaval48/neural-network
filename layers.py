@@ -77,6 +77,9 @@ class HiddenLayer(Layer):
 
 		prev_layer.next_layer = self
 
+		# initializing next layer now so that we can identify last layer
+		self.next_layer = None
+
 		self.weights = tf.get_variable("weights", 
 			shape=(nodes, prev_layer.nodes), 
 			initializer=tf.random_normal_initializer())
@@ -116,16 +119,33 @@ class HiddenLayer(Layer):
 		return self.activations
 
 
-	def calc_grad_cost_activation(self):
-		"""
-		Returns: tensor of shape batch_size x activations
+	# def calc_grad_cost_activation(self):
+	# 	"""
+	# 	Returns: tensor of shape batch_size x activations
 
-		"""
-		self.grad_cost_activation = \
-		tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
-		self.calc_grad_activation_pre_activation()
+	# 	"""
+	# 	self.grad_cost_activation = \
+	# 	tf.matmul(self.next_layer.calc_grad_cost_activation(), self.next_layer.weights) * \
+	# 	self.calc_grad_activation_pre_activation()
 
-		return self.grad_cost_activation
+	# 	return self.grad_cost_activation
+
+
+	def calc_grad_cost_activation_prev_layer(self):
+		"""
+		Returns: tensor of shape batch_size x previous layer activations
+		"""
+		if not self.prev_layer.is_input:
+			if self.next_layer is None:
+				cur_layer_grad_cost_activation_fn = self.calc_grad_cost_activation
+			else:
+				cur_layer_grad_cost_activation_fn = self.next_layer.calc_grad_cost_activation_prev_layer
+
+			self.prev_layer.grad_cost_activation = \
+			tf.matmul(cur_layer_grad_cost_activation_fn(), self.weights) * \
+			self.prev_layer.calc_grad_activation_pre_activation()
+
+			return self.prev_layer.grad_cost_activation
 
 
 	# have to do for multiple datapoints and multiple weights
@@ -205,8 +225,7 @@ class HiddenLayer(Layer):
 
 class OutputLayer(HiddenLayer):
 	"""
-		output layer with softmax activation and logistic loss
-
+		output layer with softmax activation and softmax cross entropy loss
 	"""
 
 	# have to do for multiple datapoints
