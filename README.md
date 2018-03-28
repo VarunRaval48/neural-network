@@ -9,6 +9,6 @@ Datasets I am planning to use are NORB, CALTECH 101, MNIST.
 
 ## Work Done
 
-Normal Neural Network is ready. You can add as many fully connected layers as required. I have also implemented output layer with logistic loss.
+Normal Neural Network is ready. You can add as many fully connected layers as required. I have also implemented a loss layer with softmax cross entropy loss.
 
 For example see the *classify_iris.py* file.
