@@ -1,5 +1,6 @@
 import tensorflow as tf
 import layers as l
+import loss as lo
 from extras import *
 from train import *
 
@@ -24,7 +25,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 	output_batch = tf.one_hot(next_item[1], depth=3, dtype=tf.int32)
 
 	l.features = feature_batch
-	l.outputs = output_batch
+	lo.outputs = output_batch
 
 	prints = []
 	check = []
@@ -37,7 +38,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN):
 			[cur_layer.biases], message="biases " + str(i+1), summarize=cur_layer.nodes))
 
 
-	with tf.control_dependencies([l.features, l.outputs]):
+	with tf.control_dependencies([l.features, lo.outputs]):
 		# calculate activations of the last layer which will recalculate activations of all the 
 		# previous layers
 		calc_activations_op = layers[-1].calc_activations()
@@ -85,19 +86,25 @@ def make_layers(n_features):
 		input_layer = l.InputLayer(n_features)
 
 	with tf.variable_scope("hidden_layer_1_scope"):
-		hidden_layer_1 = l.HiddenLayer(hidden_layer_1_nodes, input_layer, 
+		hidden_layer_1 = l.FullyConnectedLayer(hidden_layer_1_nodes, input_layer, 
 											activation=None, name="hidden layer 1")
 
 	with tf.variable_scope("hidden_layer_2_scope"):
-		hidden_layer_2 = l.HiddenLayer(hidden_layer_2_nodes, hidden_layer_1, 
+		hidden_layer_2 = l.FullyConnectedLayer(hidden_layer_2_nodes, hidden_layer_1, 
 											activation=None, name="hidden layer 2")
 
 	with tf.variable_scope("output_layer_scope"):
-		output_layer = l.OutputLayer(n_classes, hidden_layer_2,  
-											activation=None, grad_activation=None, 
-											name="output layer") #TODO
+		hidden_layer_3 = l.FullyConnectedLayer(n_classes, hidden_layer_2, 
+											activation=None, name="output layer")
 
-	layers = [input_layer, hidden_layer_1, hidden_layer_2, output_layer]
+
+	# with tf.variable_scope("output_layer_scope"):
+	# 	output_layer = l.OutputLayer(n_classes, hidden_layer_2,  
+	# 										activation=None, grad_activation=None, 
+	# 										name="output layer") #TODO
+
+	layers = [input_layer, hidden_layer_1, hidden_layer_2, hidden_layer_3]
+	# layers = [input_layer, hidden_layer_1, hidden_layer_2, output_layer]
 	# layers = [input_layer, output_layer]
 
 	return layers
@@ -125,11 +132,12 @@ if __name__ == '__main__':
 	print("size of the dataset is:", train_size)
 	print("number of features are:", n_features)
 
-	alpha = 0.00001
+	alpha = 0.01
 
 	layers = make_layers(n_features)
+	loss = lo.SoftmaxCrossEntropyLoss(layers[-1])
 
-	fit(model, layers, dataset, feature_columns, train_size, alpha=alpha)
+	fit(model, layers, loss, dataset, feature_columns, train_size, alpha=alpha)
 
 	# print(test[1])
 	print()

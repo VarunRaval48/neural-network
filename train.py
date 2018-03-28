@@ -12,7 +12,7 @@ TASK_TRAIN = 'train'
 TASK_PREDICT = 'predict'
 
 
-def gradient_descent(model, layers, dataset, feature_columns, train_size, alpha, sess):
+def gradient_descent(model, layers, loss, dataset, feature_columns, train_size, alpha, sess):
 	"""
 	Perform the gradient descent and updates weights, biases
 
@@ -40,17 +40,17 @@ def gradient_descent(model, layers, dataset, feature_columns, train_size, alpha,
 		grad_cost_weights, grad_cost_biases = model(layers, iterator, feature_columns, task=TASK_TRAIN)
 
 		for i, cur_layer in enumerate(layers[1:]):
-			update = tf.subtract(cur_layer.weights, alpha * (grad_cost_weights[i]))
+			update = tf.subtract(cur_layer.weights, (alpha / BATCH_SIZE) * (grad_cost_weights[i]))
 			operations.append(tf.assign(cur_layer.weights, update))
 
-			update = tf.subtract(cur_layer.biases, alpha * (grad_cost_biases[i]))
+			update = tf.subtract(cur_layer.biases, (alpha / BATCH_SIZE) * (grad_cost_biases[i]))
 			operations.append(tf.assign(cur_layer.biases, update))
 
 		with tf.control_dependencies(operations):
-			loss = layers[-1].calculate_loss()
-			prints.append(tf.Print(loss, [loss], message="loss is "))
+			calc_loss = loss.calculate_loss()
+			prints.append(tf.Print(calc_loss, [calc_loss], message="loss is "))
 
-		with tf.control_dependencies([*prints, loss]):
+		with tf.control_dependencies([*prints, calc_loss]):
 			return tf.add(iter_n, 1.0)
 
 
@@ -72,7 +72,7 @@ def gradient_descent(model, layers, dataset, feature_columns, train_size, alpha,
 	# 	layers.outputs : sess.run(output_batch)})
 
 
-def fit(model, layers, dataset, feature_columns, train_size, alpha=0.001):
+def fit(model, layers, loss, dataset, feature_columns, train_size, alpha=0.001):
 	"""
 	Fits the model to the dataset
 
@@ -89,8 +89,8 @@ def fit(model, layers, dataset, feature_columns, train_size, alpha=0.001):
 		sess.run(tf.global_variables_initializer())
 
 		# can perform weight initialization using Autoencoder
-	
-		gradient_descent(model, layers, dataset, feature_columns, train_size, alpha, sess)
+
+		gradient_descent(model, layers, loss, dataset, feature_columns, train_size, alpha, sess)
 
 		saver.save(sess, 'save_1/')
 

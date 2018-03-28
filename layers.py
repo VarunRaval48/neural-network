@@ -5,7 +5,6 @@ import pandas as pd
 
 
 features = tf.placeholder(tf.float32)
-outputs = tf.placeholder(tf.int32)
 
 
 class Layer(ABC):
@@ -14,7 +13,6 @@ class Layer(ABC):
 	nodes: the number of nodes in this layer
 	is_input: True if this layer is an input layer
 	name: the name of this layer
-
 	"""
 
 	def __init__(self, nodes, is_input=False, name=""):
@@ -58,7 +56,7 @@ class InputLayer(Layer):
 		return self.activations
 
 
-class HiddenLayer(Layer):
+class FullyConnectedLayer(Layer):
 
 	"""
 		prev_layer: the layer before this layer (don't use this constructor for input layer)
@@ -66,7 +64,6 @@ class HiddenLayer(Layer):
 		activation: the function used to perform activation of the neurons
 
 		grad_activation: the function used to perform gradient of the activation function
-
 	"""
 
 	def __init__(self, nodes, prev_layer, activation, grad_activation=None, name=""):
@@ -136,10 +133,13 @@ class HiddenLayer(Layer):
 		Returns: tensor of shape batch_size x previous layer activations
 		"""
 		if not self.prev_layer.is_input:
-			if self.next_layer is None:
-				cur_layer_grad_cost_activation_fn = self.calc_grad_cost_activation
-			else:
-				cur_layer_grad_cost_activation_fn = self.next_layer.calc_grad_cost_activation_prev_layer
+			# if self.next_layer is None:
+			# 	cur_layer_grad_cost_activation_fn = self.calc_grad_cost_activation
+			# else:
+			# 	cur_layer_grad_cost_activation_fn = self.next_layer.calc_grad_cost_activation_prev_layer
+
+
+			cur_layer_grad_cost_activation_fn = self.next_layer.calc_grad_cost_activation_prev_layer
 
 			self.prev_layer.grad_cost_activation = \
 			tf.matmul(cur_layer_grad_cost_activation_fn(), self.weights) * \
@@ -221,35 +221,3 @@ class HiddenLayer(Layer):
 		else:
 			# TODO replace it by tensors returned from methods
 			return self.grad_activation(self.get_pre_activations())
-
-
-class OutputLayer(HiddenLayer):
-	"""
-		output layer with softmax activation and softmax cross entropy loss
-	"""
-
-	# have to do for multiple datapoints
-	# outputs is a tensor of shape batch_size x output units
-
-
-	def calc_grad_cost_activation(self):
-		"""
-		Returns: tensor of shape (batch_size) x (activations)
-
-		"""
-		self.grad_cost_activation = \
-		tf.subtract(tf.nn.softmax(self.get_activations()), tf.to_float(outputs)) * \
-		self.calc_grad_activation_pre_activation()
-
-		return self.grad_cost_activation
-
-
-	def calculate_loss(self):
-		"""
-		calculates the softmax cross entropy loss
-
-		Returns: the tensor with scalar value of loss
-		
-		"""
-		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=outputs, 
-					logits=self.get_activations()))
