@@ -17,7 +17,7 @@ class Loss(ABC):
 
 
 	@abstractmethod
-	def calc_grad_cost_activation_prev_layer(self):
+	def calc_grad_cost_pre_activation_prev_layer(self):
 		pass
 
 
@@ -35,16 +35,16 @@ class SoftmaxCrossEntropyLoss(Loss):
 		Loss.__init__(self, prev_layer)
 
 
-	def calc_grad_cost_activation_prev_layer(self):
+	def calc_grad_cost_pre_activation_prev_layer(self):
 		"""
 		Returns: tensor of shape (batch_size) x (activations)
 		"""
 
-		self.prev_layer.grad_cost_activation = \
+		self.prev_layer.grad_cost_pre_activation = \
 		tf.subtract(tf.nn.softmax(self.prev_layer.get_activations()), tf.to_float(self.outputs)) * \
 		self.prev_layer.calc_grad_activation_pre_activation()
 
-		return self.prev_layer.grad_cost_activation
+		return self.prev_layer.grad_cost_pre_activation
 
 
 	def calculate_loss(self):

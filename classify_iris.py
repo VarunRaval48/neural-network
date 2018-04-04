@@ -58,7 +58,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN, loss=None):
 	with tf.control_dependencies([*check, calc_activations_op]):
 		# calculate error terms for the second layers which will calculate error terms for all 
 		# the next layers
-		calc_grad_cost_activation_op = layers[2].calc_grad_cost_activation_prev_layer()
+		calc_grad_cost_pre_activation_op = layers[2].calc_grad_cost_pre_activation_prev_layer()
 
 		# calculate grad activation weight (not useful here)
 		calc_grad_activation_weight_op = \
@@ -68,7 +68,7 @@ def model(layers, iterator, feature_columns, task=TASK_TRAIN, loss=None):
 	grad_cost_weights = []
 	grad_cost_biases = []
 
-	with tf.control_dependencies([*prints, calc_grad_cost_activation_op, 
+	with tf.control_dependencies([*prints, calc_grad_cost_pre_activation_op, 
 		*calc_grad_activation_weight_op]):
 
 		for i, cur_layer in enumerate(layers[1:]):
