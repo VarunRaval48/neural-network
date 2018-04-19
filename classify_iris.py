@@ -4,79 +4,42 @@ import loss as lo
 from extras import *
 from train import *
 
+NUMBER_EPOCHS_TO_TRAIN = 1000
+BATCH_SIZE = 120
 
-def model(layers, iterator, feature_columns, task=TASK_TRAIN, loss=None):
-	"""
-	Creates the graph and returns values according to task
 
-	layers: the list of initialized layers
-	iterator: iterator over the dataset which gets items in batches
-	feature_columns: list of feature columns to get features from dataset
-	task: task for which this function is called
-
-	Returns: a tensor of predictions if task is to predict 
-			 a list of tensors of grad cost weights and grad cost biases if task is to train
-	"""
-
+def model_3(iterator, process_input_output_fn, kwargs, task=TASK_TRAIN):
 	next_item = iterator.get_next()
 
-	# converting next_item[0] to features
-	feature_batch = tf.feature_column.input_layer(next_item[0], feature_columns)
-	output_batch = tf.one_hot(next_item[1], depth=3, dtype=tf.int32)
+	feature_batch, output_batch = process_input_output_fn(next_item[0], next_item[1], **kwargs)
 
-	pre_calculations = []
+	with tf.variable_scope("dense_1"):
+		dense_1 = tf.layers.dense(feature_batch, 10, kernel_initializer=tf.random_normal_initializer(),
+			bias_initializer=tf.random_normal_initializer())
 
-	layers[0].features = feature_batch
-
-	pre_calculations.append(layers[0].features)
-
-	if loss is not None:
-		loss.outputs = output_batch
-		pre_calculations.append(loss.outputs)
-
-
-	prints = []
-	check = []
-
-	for i, cur_layer in enumerate(layers[1:]):
-		check.append(tf.Print(cur_layer.weights, 
-			[cur_layer.weights], message="weights " + str(i+1), 
-			summarize=cur_layer.nodes*cur_layer.prev_layer.nodes))
-		check.append(tf.Print(cur_layer.biases, 
-			[cur_layer.biases], message="biases " + str(i+1), summarize=cur_layer.nodes))
-
-
-	with tf.control_dependencies(pre_calculations):
-		# calculate activations of the last layer which will recalculate activations of all the 
-		# previous layers
-		calc_activations_op = layers[-1].calc_activations()
+	with tf.variable_scope("dense_2"):
+		dense_2 = tf.layers.dense(dense_1, 3, kernel_initializer=tf.random_normal_initializer(),
+			bias_initializer=tf.random_normal_initializer())
 
 	if task == TASK_PREDICT:
-		return tf.argmax(calc_activations_op, 1)
+		return tf.argmax(dense_2)
+
+	loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=output_batch, logits=dense_2))
+	return loss
 
 
-	with tf.control_dependencies([*check, calc_activations_op]):
-		# calculate error terms for the second layers which will calculate error terms for all 
-		# the next layers
-		calc_grad_cost_pre_activation_op = layers[2].calc_grad_cost_pre_activation_prev_layer()
+def iris_process_input_output_fn(features, labels, feature_columns):
+	"""
+	features: output of iterator
+	labels: output of iterator
+	feature_columns: list of feature columns to get features from dataset
 
-		# calculate grad activation weight (not useful here)
-		calc_grad_activation_weight_op = \
-		[layers[i].calc_grad_activation_weight() for i in range(1, len(layers))]
+	Returns: processed feaures and labels
+	"""
+	feature_batch = tf.feature_column.input_layer(features, feature_columns)
+	output_batch = tf.one_hot(labels, depth=3, dtype=tf.int32)
 
-
-	grad_cost_weights = []
-	grad_cost_biases = []
-
-	with tf.control_dependencies([*prints, calc_grad_cost_pre_activation_op, 
-		*calc_grad_activation_weight_op]):
-
-		for i, cur_layer in enumerate(layers[1:]):
-			grad_cost_weights.append(cur_layer.calc_grad_cost_weight())
-
-			grad_cost_biases.append(cur_layer.calc_grad_cost_bias())
-
-		return grad_cost_weights, grad_cost_biases
+	return feature_batch, output_batch
 
 
 def make_layers(n_features):
@@ -86,12 +49,12 @@ def make_layers(n_features):
 	Returns: the list of layers
 	"""
 
-	hidden_layer_1_nodes = 10
-	hidden_layer_2_nodes = 3
-	n_classes = 3
+	hidden_layer_1_nodes = [10]
+	hidden_layer_2_nodes = [3]
+	n_classes = [3]
 
 	with tf.variable_scope("input_layer_scope"):
-		input_layer = l.InputLayer(n_features)
+		input_layer = l.InputLayer([n_features])
 
 	with tf.variable_scope("hidden_layer_1_scope"):
 		hidden_layer_1 = l.FullyConnectedLayer(hidden_layer_1_nodes, input_layer, 
@@ -105,15 +68,7 @@ def make_layers(n_features):
 		hidden_layer_3 = l.FullyConnectedLayer(n_classes, hidden_layer_2, 
 											activation=None, name="output layer")
 
-
-	# with tf.variable_scope("output_layer_scope"):
-	# 	output_layer = l.OutputLayer(n_classes, hidden_layer_2,  
-	# 										activation=None, grad_activation=None, 
-	# 										name="output layer") #TODO
-
 	layers = [input_layer, hidden_layer_1, hidden_layer_2, hidden_layer_3]
-	# layers = [input_layer, hidden_layer_1, hidden_layer_2, output_layer]
-	# layers = [input_layer, output_layer]
 
 	return layers
 
@@ -145,8 +100,10 @@ if __name__ == '__main__':
 	layers = make_layers(n_features)
 	loss = lo.SoftmaxCrossEntropyLoss(layers[-1])
 
-	fit(model, layers, loss, dataset, feature_columns, train_size, alpha=alpha)
+	kwargs = {}
+	kwargs['feature_columns'] = feature_columns
 
-	# print(test[1])
+	fit(iris_process_input_output_fn, kwargs, layers, loss, dataset, train_size, alpha)
+
 	print()
-	predict(model, layers, test_dataset, feature_columns, test_size, test[1])
+	predict(iris_process_input_output_fn, kwargs, layers, test_dataset, test_size, test[1])

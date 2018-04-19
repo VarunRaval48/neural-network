@@ -303,7 +303,7 @@ class ConvolutionLayer(HiddenLayer):
 		self.pre_activations = tf.nn.conv2d(input=self.prev_layer.calc_activations(), 
 			filter=self.weights, strides=[1, 1, 1, 1], padding='VALID')
 
-		self.shape_input = tf.shape(prev_layer.get_activations())
+		self.shape_input = tf.shape(self.prev_layer.get_activations())
 		return self.pre_activations
 
 
@@ -343,26 +343,33 @@ class PoolingLayer(Layer):
 
 		out_height = ((prev_layer.shape_nodes[0] - k_size[1]) / strides[1]) + 1
 		out_width = ((prev_layer.shape_nodes[1] - k_size[2]) / strides[2]) + 1
-		out_channels = prev_layer.out_channels
+		out_channels = prev_layer.shape_nodes[-1]
 		shape_nodes = [out_width, out_height, out_channels]
 
 		Layer.__init__(self, shape_nodes, prev_layer=prev_layer)
 
 		self.k_size = k_size
-		self.strides = self.strides
+		self.strides = strides
 
 		self.require_loss = True
-		layer.loss = None
+		self.loss = None
 
 
-	def calc_pre_activations():
-		self.activations = tf.nn.max_pool(value=self.prev_layer.calc_activations(), 
-			ksize=self.k_size, strides=self.strides, padding=self.padding)
+	def calc_pre_activations(self):
+		self.pre_activations = tf.nn.max_pool(value=self.prev_layer.calc_activations(), 
+			ksize=self.k_size, strides=self.strides, padding="VALID")
 
 		self.shape_input = tf.shape(self.prev_layer.get_activations())
+		return self.pre_activations
+
+	def get_pre_activations(self):
+		return self.pre_activations
+
+	def calc_activations(self):
+		self.activations = self.calc_pre_activations()
 		return self.activations
 
-	def get_activations():
+	def get_activations(self):
 		return self.activations
 
 
@@ -370,8 +377,25 @@ class PoolingLayer(Layer):
 		"""
 		Returns: tensor of shape batch_size x previous layer activations
 		"""
-		self.next_layer.calc_grad_cost_pre_activation_prev_layer()
-		self.prev_layer.grad_cost_pre_activation = \
-		tf.gradients(self.loss, self.prev_layer.get_pre_activations())
+		temp_depend = self.next_layer.calc_grad_cost_pre_activation_prev_layer()
 
-		return self.prev_layer.calc_grad_cost_pre_activation_prev_layer
+		with tf.control_dependencies([temp_depend]):
+			prev_layer_pre_act = self.prev_layer.get_pre_activations()
+			prev_layer_pre_act_f = tf.reshape(prev_layer_pre_act, [-1])
+
+			# it = np.nditer(np.ones())
+			# while not it.finished
+
+			prev_layer_grad_cost_pre_activation = \
+			tf.map_fn(lambda x: tf.gradients(ys=self.loss, xs=x)[0], prev_layer_pre_act_f)
+
+			# prev_layer_grad_cost_pre_activation = tf.gradients(self.loss, prev_layer_pre_act_f)
+
+			self.prev_layer.grad_cost_pre_activation = \
+			tf.reshape(prev_layer_grad_cost_pre_activation, tf.shape(prev_layer_pre_act))
+
+			return self.prev_layer.grad_cost_pre_activation
+
+
+	def calc_grad_activation_pre_activation(self):
+		return tf.ones(tf.shape(self.get_pre_activations()))

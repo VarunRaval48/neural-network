@@ -34,6 +34,8 @@ class SoftmaxCrossEntropyLoss(Loss):
 	def __init__(self, prev_layer):
 		Loss.__init__(self, prev_layer)
 
+		self.loss = None
+
 
 	def calc_grad_cost_pre_activation_prev_layer(self):
 		"""
@@ -46,7 +48,6 @@ class SoftmaxCrossEntropyLoss(Loss):
 
 		return self.prev_layer.grad_cost_pre_activation
 
-
 	def calculate_loss(self):
 		"""
 		calculates the softmax cross entropy loss
@@ -54,5 +55,10 @@ class SoftmaxCrossEntropyLoss(Loss):
 		Returns: the tensor with scalar value of loss
 		"""
 
-		return tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.outputs, 
+		self.loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.outputs, 
 					logits=self.prev_layer.get_activations()))
+
+		return self.loss
+
+	def get_loss(self):
+		return self.loss
