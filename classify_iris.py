@@ -1,3 +1,8 @@
+"""
+This file shows how to use the layers defined in layers.py file, read dataset, and use
+my implementation of gradient descent to perform training on a dataset.
+"""
+
 import tensorflow as tf
 import layers as l
 import loss as lo
@@ -6,26 +11,6 @@ from train import *
 
 NUMBER_EPOCHS_TO_TRAIN = 1000
 BATCH_SIZE = 120
-
-
-def model_3(iterator, process_input_output_fn, kwargs, task=TASK_TRAIN):
-	next_item = iterator.get_next()
-
-	feature_batch, output_batch = process_input_output_fn(next_item[0], next_item[1], **kwargs)
-
-	with tf.variable_scope("dense_1"):
-		dense_1 = tf.layers.dense(feature_batch, 10, kernel_initializer=tf.random_normal_initializer(),
-			bias_initializer=tf.random_normal_initializer())
-
-	with tf.variable_scope("dense_2"):
-		dense_2 = tf.layers.dense(dense_1, 3, kernel_initializer=tf.random_normal_initializer(),
-			bias_initializer=tf.random_normal_initializer())
-
-	if task == TASK_PREDICT:
-		return tf.argmax(dense_2)
-
-	loss = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits_v2(labels=output_batch, logits=dense_2))
-	return loss
 
 
 def iris_process_input_output_fn(features, labels, feature_columns):
