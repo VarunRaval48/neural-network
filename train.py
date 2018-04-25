@@ -1,3 +1,8 @@
+"""
+This file contains my implementation of gradient descent. It also contains
+method to evaluate trained model.
+"""
+
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -112,6 +117,7 @@ def gradient_descent(process_input_output_fn, kwargs, layers, loss, dataset, tra
 	dataset: the dataset whose iterator returns the input and outputs in batches
 	train_size: the size of the dataset that each epoch should at least travel
 	alpha: the step_size
+	sess: the session
 	"""
 
 	# run the gradient descent on entire dataset for number of epochs
@@ -263,7 +269,7 @@ def fit(process_input_output_fn, kwargs, layers, loss, dataset, train_size, alph
 
 		# can perform weight initialization using Autoencoder
 
-		gradient_descent_2(process_input_output_fn, kwargs, layers, 
+		gradient_descent(process_input_output_fn, kwargs, layers, 
 			loss, dataset, train_size, alpha, sess)
 		# gradient_descent(process_input_output_fn, kwargs, layers, 
 		# 	loss, dataset, train_size, alpha, sess)

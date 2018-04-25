@@ -1,3 +1,7 @@
+"""
+This file contains various layers implemented by me.
+"""
+
 from abc import ABC, abstractmethod
 import tensorflow as tf
 import numpy as np

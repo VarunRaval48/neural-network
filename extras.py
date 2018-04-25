@@ -1,3 +1,7 @@
+"""
+This file contain functions to read dataset.
+"""
+
 import tensorflow as tf
 import pandas as pd
 import numpy as np

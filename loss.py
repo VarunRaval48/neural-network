@@ -1,3 +1,7 @@
+"""
+This file contains various loss functions implemented by me
+"""
+
 from abc import ABC, abstractmethod
 import tensorflow as tf
 
